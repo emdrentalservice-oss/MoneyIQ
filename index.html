@@ -9,11 +9,11 @@
 <style>*{margin:0;padding:0;box-sizing:border-box}body{background:#060d13;overflow-x:hidden;-webkit-font-smoothing:antialiased}</style>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone@7.24.0/babel.min.js"></script>
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel">
+<script type="text/babel" data-presets="react">
 const {useState, useEffect, useRef} = React;
 
 
@@ -38,7 +38,7 @@ const Ring = ({pct,size=56,stroke=5,color=C.green})=>{const r=(size-stroke)/2,ci
 const Chart = ({data,color=C.green,h=36,w=90})=>{const mx=Math.max(...data),mn=Math.min(...data),rr=mx-mn||1;const pts=data.map((v,i)=>`${(i/(data.length-1))*w},${h-((v-mn)/rr)*h}`).join(" ");return(<svg width={w} height={h} style={{overflow:"visible"}}><defs><linearGradient id={`g${color.slice(1)}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".25"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs><polygon points={`0,${h} ${pts} ${w},${h}`} fill={`url(#g${color.slice(1)})`}/><polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>)};
 const Card = ({children,style,onClick})=>(<div onClick={onClick} style={{background:C.card,borderRadius:16,padding:18,border:`1px solid ${C.border}`,cursor:onClick?"pointer":"default",transition:"all .2s",...style}}>{children}</div>);
 const Modal = ({open,onClose,title,children})=>!open?null:(<div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center"}}><div onClick={onClose} style={{position:"absolute",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(4px)"}}/><div style={{position:"relative",background:C.card,border:`1px solid ${C.border}`,borderRadius:20,padding:24,width:"92%",maxWidth:440,maxHeight:"85vh",overflow:"auto",fontFamily:F}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{color:C.text,fontSize:18,fontWeight:700,margin:0}}>{title}</h3><button onClick={onClose} style={{background:"transparent",border:"none",color:C.muted,fontSize:22,cursor:"pointer",padding:0}}>×</button></div>{children}</div></div>);
-const Btn = ({children,onClick,color=C.green,outline,small,full,disabled,style:s})=>(<button disabled={disabled} onClick={onClick} style={{padding:small?"7px 14px":"12px 24px",borderRadius:10,border:outline?`2px solid ${color}`:"none",background:outline?"transparent":color,color:outline?color:"#000",fontWeight:700,fontSize:small?11:13,cursor:disabled?"default":"pointer",fontFamily:F,opacity:disabled?.5:1,width:full?"100%":"auto",transition:"all .2s",...s}}>{children}</button>);
+const Btn = ({children,onClick,color=C.green,outline,small,full,disabled,style:s})=>(<button disabled={disabled} onClick={onClick} style={{padding:small?"7px 14px":"12px 24px",borderRadius:10,border:outline?`2px solid ${color}`:"none",background:outline?"transparent":color,color:outline?color:"#000",fontWeight:700,fontSize:small?11:13,cursor:disabled?"default":"pointer",fontFamily:F,opacity:disabled?0.5:1,width:full?"100%":"auto",transition:"all .2s",...s}}>{children}</button>);
 const Toggle = ({on,onToggle,label})=>(<div onClick={onToggle} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",cursor:"pointer"}}><span style={{color:C.text,fontSize:13}}>{label}</span><div style={{width:42,height:24,borderRadius:12,background:on?C.green:C.border,padding:2,transition:"all .2s",display:"flex",alignItems:"center",justifyContent:on?"flex-end":"flex-start"}}><div style={{width:20,height:20,borderRadius:10,background:"#fff",transition:"all .2s"}}/></div></div>);
 
 function function MoneyIQ(){
@@ -126,7 +126,7 @@ function function MoneyIQ(){
   };
 
   const handleImageUpload=(e)=>{
-    const file=e.target.files?.[0];
+    const file=e.target.files && e.target.files[0];
     if(!file)return;
     const reader=new FileReader();
     reader.onload=(ev)=>{
@@ -267,7 +267,7 @@ function function MoneyIQ(){
       <div style={{padding:"16px 16px 8px"}}><h2 style={{color:C.text,fontSize:20,fontWeight:700,margin:0}}>🤖 {en?"AI Coach":"Coach IA"}</h2><p style={{color:C.muted,fontSize:11,margin:"4px 0 0"}}>{en?"Bills · Credit · Cash Flow · Savings · Investing · 📸 Document Scanner":"Facturas · Crédito · Flujo · Ahorro · Inversiones · 📸 Escáner"}</p></div>
       {/* Quick action chips */}
       {chatMsgs.length===0&&(<div style={{padding:"0 16px 8px",display:"flex",gap:6,flexWrap:"wrap"}}>
-        {(en?["📸 Scan a document","What bills am I paying?","Will I make it to payday?","How's my credit?","Open a Roth IRA","Cheapest way to send $ to DR","Help me save more"]:["📸 Escanear documento","¿Qué facturas pago?","¿Llegaré al día de pago?","¿Cómo va mi crédito?","Abrir un Roth IRA","Enviar dinero a RD barato","Ayúdame a ahorrar"]).map(chip=>(<button key={chip} onClick={()=>{if(chip.includes("📸")){fileRef.current?.click();return;}setChatInput(chip);setTimeout(()=>{setChatMsgs(p=>[...p,{role:"user",text:chip}]);setTimeout(()=>setChatMsgs(p=>[...p,{role:"ai",text:getAiResponse(chip)}]),800)},100)}} style={{padding:"8px 12px",borderRadius:20,border:`1px solid ${chip.includes("📸")?C.amber:C.border}`,background:chip.includes("📸")?`${C.amber}15`:C.card,color:chip.includes("📸")?C.amber:C.green,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>{chip}</button>))}
+        {(en?["📸 Scan a document","What bills am I paying?","Will I make it to payday?","How's my credit?","Open a Roth IRA","Cheapest way to send $ to DR","Help me save more"]:["📸 Escanear documento","¿Qué facturas pago?","¿Llegaré al día de pago?","¿Cómo va mi crédito?","Abrir un Roth IRA","Enviar dinero a RD barato","Ayúdame a ahorrar"]).map(chip=>(<button key={chip} onClick={()=>{if(chip.includes("📸")){fileRef.current && fileRef.current.click();return;}setChatInput(chip);setTimeout(()=>{setChatMsgs(p=>[...p,{role:"user",text:chip}]);setTimeout(()=>setChatMsgs(p=>[...p,{role:"ai",text:getAiResponse(chip)}]),800)},100)}} style={{padding:"8px 12px",borderRadius:20,border:`1px solid ${chip.includes("📸")?C.amber:C.border}`,background:chip.includes("📸")?`${C.amber}15`:C.card,color:chip.includes("📸")?C.amber:C.green,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>{chip}</button>))}
       </div>)}
       <div ref={chatRef} style={{flex:1,overflow:"auto",padding:"0 16px"}}>
         {chatMsgs.length===0&&(<div style={{textAlign:"center",paddingTop:30}}><div style={{fontSize:48,marginBottom:12}}>🤖</div><p style={{color:C.text,fontSize:16,fontWeight:700,margin:"0 0 8px"}}>{en?"I'm your MoneyIQ Coach":"Soy tu Coach MoneyIQ"}</p><p style={{color:C.muted,fontSize:13,lineHeight:1.6,maxWidth:300,margin:"0 auto 16px"}}>{en?"Ask me anything about your money. I'll use your real financial data to give personalized advice — not generic tips.":"Pregúntame sobre tu dinero. Uso tus datos reales para consejos personalizados."}</p>
