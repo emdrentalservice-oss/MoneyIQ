@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<meta name="theme-color" content="#060d13"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>MoneyIQ — Tu Coach Financiero con IA</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#060d13;overflow-x:hidden;-webkit-font-smoothing:antialiased}</style>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState, useEffect, useRef} = React;
+
+
+
+const C = {
+  bg: "#060d13", card: "#0e1a24", surface: "#0a1219",
+  border: "#1a2d3d", borderLight: "#243a4d",
+  green: "#00e676", greenDark: "#00c853", greenDim: "#1b5e20",
+  blue: "#448aff", blueDim: "#1a3a6b",
+  amber: "#ffab00", amberDim: "#5d4037",
+  red: "#ff5252", redDim: "#4a1c1c",
+  purple: "#b388ff", purpleDim: "#311b92",
+  cyan: "#18ffff", teal: "#26a69a",
+  text: "#ecf0f4", muted: "#7a8fa0", dim: "#4a5c6d",
+};
+const F = "'DM Sans',sans-serif";
+const fmt = n => (n<0?"-":"")+"$"+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2});
+
+const Pill = ({children,color=C.green})=>(<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:700,color,background:`${color}18`,fontFamily:F}}>{children}</span>);
+const Bar = ({pct,color=C.green,h=6})=>(<div style={{height:h,borderRadius:h/2,background:C.surface,overflow:"hidden"}}><div style={{height:"100%",borderRadius:h/2,width:`${Math.min(pct,100)}%`,background:pct>100?C.red:color,transition:"width .6s ease"}}/></div>);
+const Ring = ({pct,size=56,stroke=5,color=C.green})=>{const r=(size-stroke)/2,ci=2*Math.PI*r;return(<svg width={size} height={size} style={{transform:"rotate(-90deg)"}}><circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.border} strokeWidth={stroke}/><circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeDasharray={ci} strokeDashoffset={ci-(pct/100)*ci} strokeLinecap="round" style={{transition:"all .8s ease"}}/></svg>)};
+const Chart = ({data,color=C.green,h=36,w=90})=>{const mx=Math.max(...data),mn=Math.min(...data),rr=mx-mn||1;const pts=data.map((v,i)=>`${(i/(data.length-1))*w},${h-((v-mn)/rr)*h}`).join(" ");return(<svg width={w} height={h} style={{overflow:"visible"}}><defs><linearGradient id={`g${color.slice(1)}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".25"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs><polygon points={`0,${h} ${pts} ${w},${h}`} fill={`url(#g${color.slice(1)})`}/><polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>)};
+const Card = ({children,style,onClick})=>(<div onClick={onClick} style={{background:C.card,borderRadius:16,padding:18,border:`1px solid ${C.border}`,cursor:onClick?"pointer":"default",transition:"all .2s",...style}}>{children}</div>);
+const Modal = ({open,onClose,title,children})=>!open?null:(<div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center"}}><div onClick={onClose} style={{position:"absolute",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(4px)"}}/><div style={{position:"relative",background:C.card,border:`1px solid ${C.border}`,borderRadius:20,padding:24,width:"92%",maxWidth:440,maxHeight:"85vh",overflow:"auto",fontFamily:F}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{color:C.text,fontSize:18,fontWeight:700,margin:0}}>{title}</h3><button onClick={onClose} style={{background:"transparent",border:"none",color:C.muted,fontSize:22,cursor:"pointer",padding:0}}>×</button></div>{children}</div></div>);
+const Btn = ({children,onClick,color=C.green,outline,small,full,disabled,style:s})=>(<button disabled={disabled} onClick={onClick} style={{padding:small?"7px 14px":"12px 24px",borderRadius:10,border:outline?`2px solid ${color}`:"none",background:outline?"transparent":color,color:outline?color:"#000",fontWeight:700,fontSize:small?11:13,cursor:disabled?"default":"pointer",fontFamily:F,opacity:disabled?.5:1,width:full?"100%":"auto",transition:"all .2s",...s}}>{children}</button>);
+const Toggle = ({on,onToggle,label})=>(<div onClick={onToggle} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",cursor:"pointer"}}><span style={{color:C.text,fontSize:13}}>{label}</span><div style={{width:42,height:24,borderRadius:12,background:on?C.green:C.border,padding:2,transition:"all .2s",display:"flex",alignItems:"center",justifyContent:on?"flex-end":"flex-start"}}><div style={{width:20,height:20,borderRadius:10,background:"#fff",transition:"all .2s"}}/></div></div>);
+
+function function MoneyIQ(){
+  const [screen,setScreen]=useState("splash");
+  const [tab,setTab]=useState("home");
+  const [lang,setLang]=useState("en");
+  const [linked,setLinked]=useState(false);
+  const [bankStep,setBankStep]=useState(0);
+  const [showProfile,setShowProfile]=useState(false);
+  const [userName,setUserName]=useState("Enmanuel");
+  const [variableIncome,setVariableIncome]=useState(false);
+  const [chatMsgs,setChatMsgs]=useState([]);
+  const [chatInput,setChatInput]=useState("");
+  const [scanning,setScanning]=useState(false);
+  const chatRef=useRef(null);
+  const fileRef=useRef(null);
+  const [budgets,setBudgets]=useState([
+    {id:1,icon:"🏠",labelEn:"Housing",labelEs:"Vivienda",spent:1800,budget:1800,color:C.blue},
+    {id:2,icon:"🍽️",labelEn:"Food",labelEs:"Comida",spent:640,budget:500,color:C.red},
+    {id:3,icon:"🚗",labelEn:"Transport",labelEs:"Transporte",spent:180,budget:300,color:C.green},
+    {id:4,icon:"💰",labelEn:"Savings",labelEs:"Ahorro",spent:400,budget:500,color:C.amber},
+    {id:5,icon:"🛒",labelEn:"Shopping",labelEs:"Compras",spent:210,budget:300,color:C.purple},
+    {id:6,icon:"📱",labelEn:"Subscriptions",labelEs:"Suscripciones",spent:89,budget:100,color:C.cyan},
+    {id:7,icon:"🎬",labelEn:"Entertainment",labelEs:"Entretenimiento",spent:65,budget:150,color:C.amber},
+  ]);
+  const [editBudget,setEditBudget]=useState(null);
+  const [goals,setGoals]=useState([
+    {id:1,emoji:"🛡️",nameEn:"Emergency Fund",nameEs:"Fondo Emergencia",current:8200,target:15000,color:C.green,monthly:400},
+    {id:2,emoji:"🏠",nameEn:"Home Down Payment",nameEs:"Enganche Casa",current:12000,target:60000,color:C.blue,monthly:800},
+    {id:3,emoji:"📈",nameEn:"Investment Fund",nameEs:"Inversiones",current:5400,target:10000,color:C.amber,monthly:300},
+    {id:4,emoji:"🎓",nameEn:"MBA Tuition",nameEs:"MBA",current:3200,target:8000,color:C.purple,monthly:250},
+  ]);
+  const [showAddGoal,setShowAddGoal]=useState(false);
+  const [newGoal,setNewGoal]=useState({emoji:"🎯",name:"",target:"",monthly:""});
+  const [txnDetail,setTxnDetail]=useState(null);
+  const en=lang==="en";
+  const totalSpent=budgets.reduce((a,b)=>a+b.spent,0);
+  const totalBudget=budgets.reduce((a,b)=>a+b.budget,0);
+
+  const transactions=[
+    {id:1,name:"Walmart",amt:-67.42,cat:"🛒",catName:en?"Shopping":"Compras",date:"Mar 14",desc:"Groceries"},
+    {id:2,name:"Shell Gas",amt:-48.00,cat:"⛽",catName:en?"Transport":"Transporte",date:"Mar 13",desc:"Fuel"},
+    {id:3,name:"MCAS Deposit",amt:2840,cat:"💰",catName:en?"Income":"Ingreso",date:"Mar 12",desc:"Paycheck"},
+    {id:4,name:"Netflix",amt:-15.49,cat:"📺",catName:en?"Subscription":"Suscripción",date:"Mar 11",desc:"Monthly"},
+    {id:5,name:"Chipotle",amt:-12.85,cat:"🍽️",catName:en?"Food":"Comida",date:"Mar 10",desc:"Lunch"},
+  ];
+
+  // ═══ SMART AI — handles bills, cash flow, credit, remittances, goals, everything ═══
+  const getAiResponse=(input)=>{
+    const q=input.toLowerCase();
+    if(q.includes("bill")||q.includes("subscription")||q.includes("suscri")||q.includes("cancel"))
+      return en?"📋 I found these recurring charges in your transactions:\n\n1. Netflix — $15.49/mo\n2. Spotify — $10.99/mo\n3. Gym — $29.99/mo\n4. Adobe CC — $22.99/mo\n5. Hulu — $7.99/mo\n\nTotal: $87.45/month\n\nYou haven't used Adobe in 45+ days. Canceling saves $275/year. Want me to help you create a plan to cut subscriptions?":"📋 Encontré estos cargos recurrentes:\n\n1. Netflix — $15.49/mes\n2. Spotify — $10.99/mes\n3. Gym — $29.99/mes\n4. Adobe CC — $22.99/mes\n5. Hulu — $7.99/mes\n\nTotal: $87.45/mes\n\nNo has usado Adobe en 45+ días. Cancelarlo ahorra $275/año. ¿Te ayudo con un plan?";
+    if(q.includes("payday")||q.includes("make it")||q.includes("cash flow")||q.includes("flujo")||q.includes("llegar"))
+      return en?"📊 Your cash flow forecast:\n\nBalance now: $4,820\n\nComing up:\n• T-Mobile — $85 (Mar 18)\n• Car Insurance — $156 (Mar 28)\n• Rent — $1,800 (Apr 1)\n\nNext paycheck: $2,840 (Mar 26)\n\n✅ You'll be fine! Lowest point: ~$2,779 on Mar 25 before your paycheck. Hold off on big purchases until after the 26th.":"📊 Tu pronóstico de flujo:\n\nBalance: $4,820\n\nPróximo:\n• T-Mobile — $85 (18 mar)\n• Seguro auto — $156 (28 mar)\n• Renta — $1,800 (1 abr)\n\nPago: $2,840 (26 mar)\n\n✅ ¡Vas bien! Punto más bajo: ~$2,779 el 25 mar. Evita compras grandes hasta después del 26.";
+    if(q.includes("credit")||q.includes("crédito")||q.includes("score")||q.includes("puntaje"))
+      return en?"📈 Your credit: 721 (Good)\n\nAction plan to reach 750:\n\n1️⃣ THIS WEEK: Pay $500 extra on Capital One → drops utilization from 27% to 20%\n2️⃣ THIS MONTH: Don't open any new accounts\n3️⃣ NEXT 30 DAYS: Dispute that old medical collection — offer 'pay for delete'\n4️⃣ ONGOING: Keep paying everything on time (you're at 98% — great)\n\nEstimated timeline: 750 in 3-4 months 💪":"📈 Tu crédito: 721 (Bueno)\n\nPlan para llegar a 750:\n\n1️⃣ ESTA SEMANA: Paga $500 extra en Capital One → baja utilización de 27% a 20%\n2️⃣ ESTE MES: No abras cuentas nuevas\n3️⃣ PRÓX 30 DÍAS: Disputa colección médica — ofrece 'pay for delete'\n4️⃣ CONTINUO: Sigue pagando a tiempo (98% — excelente)\n\nTiempo estimado: 750 en 3-4 meses 💪";
+    if(q.includes("retire")||q.includes("roth")||q.includes("ira")||q.includes("invest")||q.includes("jubil")||q.includes("invertir"))
+      return en?"🎯 Your Roth IRA starter plan:\n\n1️⃣ TODAY: Open a Roth IRA at Fidelity.com (free, $0 minimum)\n2️⃣ THIS WEEK: Set up auto-transfer $100/month from Chase\n3️⃣ CHOOSE: Target Date Fund 2060 (one fund, diversified, set & forget)\n\nWhy Roth? You pay taxes now, but ALL growth is tax-free forever. At $100/month with ~10% returns, that's $379,000 by age 65.\n\nYou have $4,820 in checking earning 0%. Start today — the hardest part is opening the account. 💰":"🎯 Tu plan para Roth IRA:\n\n1️⃣ HOY: Abre Roth IRA en Fidelity.com (gratis, $0 mínimo)\n2️⃣ ESTA SEMANA: Auto-transferencia $100/mes desde Chase\n3️⃣ ELIGE: Target Date Fund 2060 (un fondo, diversificado)\n\n¿Por qué Roth? Pagas impuestos ahora, pero TODO el crecimiento es libre de impuestos. A $100/mes con ~10% rendimiento, son $379,000 para los 65.\n\nTienes $4,820 ganando 0%. Empieza hoy 💰";
+    if(q.includes("remit")||q.includes("remesa")||q.includes("send money")||q.includes("enviar")||q.includes("dominican")||q.includes("familia"))
+      return en?"🌎 Sending $200 to DR? Here's the comparison:\n\n🥇 Wise — $2.40 fee + best exchange rate\n🥈 Remitly — $3.99 fee (or 'free' with worse rate)\n🥉 Xoom — $4.99 fee\n❌ Western Union — $8+ fee + worst rate\n\nSwitching from Remitly to Wise saves ~$19/year on monthly sends.\n\nPro tip: Compare TOTAL received, not just the fee. 'Free transfer' often means a worse exchange rate.":"🌎 ¿Enviar $200 a RD? Comparación:\n\n🥇 Wise — $2.40 + mejor tipo de cambio\n🥈 Remitly — $3.99 (o 'gratis' con peor cambio)\n🥉 Xoom — $4.99\n❌ Western Union — $8+ + peor cambio\n\nCambiar de Remitly a Wise ahorra ~$19/año.\n\nTip: Compara el TOTAL recibido, no solo la tarifa.";
+    if(q.includes("emergency")||q.includes("emergencia")||q.includes("save")||q.includes("ahorr"))
+      return en?"🛡️ Emergency Fund update:\n\nYou're at $8,200 of $15,000 (55%) — nice progress!\n\nSpeed it up:\n1️⃣ Move $8,200 to high-yield savings (4.5% APY) — earns $369/year free\n2️⃣ Automate $100/week → hit $15K by February\n3️⃣ Your Food is $140 over budget — meal prep saves ~$200/month\n4️⃣ Redirect that $200 → hit $15K by November instead\n\nThe money sitting in regular savings is losing value to inflation. A high-yield account fixes that. 💰":"🛡️ Fondo de Emergencia:\n\n$8,200 de $15,000 (55%) — ¡buen progreso!\n\nAcelerarlo:\n1️⃣ Mueve $8,200 a savings de alto rendimiento (4.5% APY) — gana $369/año gratis\n2️⃣ Automatiza $100/semana → llegas a $15K en febrero\n3️⃣ Comida excede $140 — preparar comida ahorra ~$200/mes\n4️⃣ Redirige esos $200 → llegas en noviembre\n\nEl dinero en savings regular pierde valor por inflación. 💰";
+    if(q.includes("house")||q.includes("home buy")||q.includes("casa")||q.includes("mortgage")||q.includes("hipoteca")||q.includes("enganche"))
+      return en?"🏠 Home buying roadmap:\n\nYour savings: $12,000 of $60,000 goal\n\nBut here's the thing — with FHA you only need 3.5%:\n• $300K home → $10,500 down. You already have enough!\n\nNext steps:\n1️⃣ Get pre-approved (free, won't hurt credit)\n2️⃣ Research first-time buyer programs in your state — many give $5K-$25K assistance\n3️⃣ Factor in closing costs (2-5% of price)\n4️⃣ Monthly payment on $300K at 6.5% ≈ $1,896 (close to your current rent)\n\nYou're closer than you think. Want me to break down the full numbers?":"🏠 Plan para comprar casa:\n\nAhorro: $12,000 de $60,000\n\nPero con FHA solo necesitas 3.5%:\n• Casa de $300K → $10,500 de enganche. ¡Ya tienes suficiente!\n\nPasos:\n1️⃣ Pre-aprobación (gratis)\n2️⃣ Investiga programas de primeros compradores\n3️⃣ Costos de cierre (2-5%)\n4️⃣ Pago mensual de $300K al 6.5% ≈ $1,896\n\n¿Quieres que desglose los números completos?";
+    if(q.includes("budget")||q.includes("presupuesto")||q.includes("spend")||q.includes("gast"))
+      return en?"💳 Budget check:\n\nSpent $3,384 of $3,650 (93%) with days left\n\n⚠️ Over: Food (+$140)\n✅ Under: Transport (-$120), Entertainment (-$85)\n\nQuick wins:\n1️⃣ Meal prep Sundays → save $200/month\n2️⃣ Move that $120 Transport savings → Emergency Fund\n3️⃣ You have $266 left = $19/day\n\nTip: Try weekly limits instead of monthly. $88/week for food is easier to track than $500/month.":"💳 Presupuesto:\n\nGastado $3,384 de $3,650 (93%)\n\n⚠️ Excedido: Comida (+$140)\n✅ Bajo: Transporte (-$120), Entretenimiento (-$85)\n\nGanancias rápidas:\n1️⃣ Prepara comida domingos → ahorra $200/mes\n2️⃣ Mueve $120 de Transporte → Fondo Emergencia\n3️⃣ Te quedan $266 = $19/día";
+    // Default
+    const defaults=[
+      en?"I can help with budgeting, credit building, saving strategies, retirement planning, remittance comparisons, bill analysis, and cash flow forecasts. Just ask! What's on your mind? 💰":"Puedo ayudarte con presupuesto, crédito, ahorro, jubilación, remesas, facturas y flujo de efectivo. ¡Solo pregunta! ¿Qué necesitas? 💰",
+      en?"Try asking me things like:\n• 'Will I make it to payday?'\n• 'How do I improve my credit?'\n• 'What subscriptions am I paying for?'\n• 'Should I open a Roth IRA?'\n• 'What's the cheapest way to send money to DR?'\n\nI use YOUR actual financial data to give personalized advice, not generic tips. 🎯":"Prueba preguntarme:\n• '¿Llegaré al día de pago?'\n• '¿Cómo mejoro mi crédito?'\n• '¿Qué suscripciones estoy pagando?'\n• '¿Debería abrir un Roth IRA?'\n• '¿Cuál es la forma más barata de enviar dinero a RD?'\n\nUso TUS datos reales para dar consejos personalizados. 🎯"
+    ];
+    return defaults[Math.floor(Math.random()*defaults.length)];
+  };
+
+  // ═══ DOCUMENT SCANNER — photograph any letter, get it explained ═══
+  const getDocScanResponse=(docType)=>{
+    const responses={
+      bank: en?"📄 I scanned your document. Here's what it says:\n\n📌 Type: Bank Statement (Chase)\n📌 Period: February 1 – February 28, 2026\n📌 Starting Balance: $5,240.33\n📌 Ending Balance: $4,820.17\n\nKey transactions:\n• Direct Deposit (MCAS) — +$2,840.00 (Feb 12)\n• Rent payment — -$1,800.00 (Feb 1)\n• T-Mobile autopay — -$85.00 (Feb 8)\n\n⚠️ I notice 3 ATM fees totaling $10.50. Your account offers 2 free ATM withdrawals — try to consolidate to avoid these fees.\n\n💡 Need me to explain anything specific on this statement?":"📄 Escaneé tu documento. Esto es lo que dice:\n\n📌 Tipo: Estado de Cuenta Bancario (Chase)\n📌 Período: 1 – 28 de febrero, 2026\n📌 Balance Inicial: $5,240.33\n📌 Balance Final: $4,820.17\n\nTransacciones clave:\n• Depósito Directo (MCAS) — +$2,840.00 (12 feb)\n• Pago de renta — -$1,800.00 (1 feb)\n• T-Mobile autopago — -$85.00 (8 feb)\n\n⚠️ Veo 3 cargos de ATM por $10.50 total. Tu cuenta incluye 2 retiros gratis — intenta consolidar para evitar estos cargos.\n\n💡 ¿Necesitas que te explique algo específico?",
+      collection: en?"📄 I scanned your document. Here's what it says:\n\n📌 Type: Collection Notice\n📌 From: Midland Credit Management\n📌 Original Creditor: Medical Center of San Diego\n📌 Amount Owed: $1,247.00\n📌 Account #: ****3847\n\n🚨 IMPORTANT — Don't panic. Here's what to do:\n\n1️⃣ DO NOT call them yet — calling can restart the statute of limitations\n2️⃣ Send a Debt Validation Letter within 30 days (I can help draft one)\n3️⃣ Check if this is past the statute of limitations in your state (CA = 4 years)\n4️⃣ If you want to settle: offer 40-50% of the balance and get 'pay for delete' in writing BEFORE paying\n\nThis is the #1 thing hurting your credit score. Handling it correctly can add 30-50 points. Want me to walk you through the process step by step?":"📄 Escaneé tu documento. Esto es lo que dice:\n\n📌 Tipo: Aviso de Cobranza\n📌 De: Midland Credit Management\n📌 Acreedor Original: Centro Médico de San Diego\n📌 Monto: $1,247.00\n📌 Cuenta #: ****3847\n\n🚨 IMPORTANTE — No entres en pánico. Esto es lo que debes hacer:\n\n1️⃣ NO los llames todavía — llamar puede reiniciar el plazo de prescripción\n2️⃣ Envía una Carta de Validación de Deuda dentro de 30 días (puedo ayudarte a redactarla)\n3️⃣ Verifica si pasó el plazo de prescripción en tu estado (CA = 4 años)\n4️⃣ Si quieres negociar: ofrece 40-50% del balance y pide 'pay for delete' POR ESCRITO antes de pagar\n\nEsto es lo que más afecta tu crédito. Manejarlo bien puede sumar 30-50 puntos. ¿Quieres que te guíe paso a paso?",
+      tax: en?"📄 I scanned your document. Here's what it says:\n\n📌 Type: W-2 Wage and Tax Statement (2025)\n📌 Employer: Department of the Navy (MCAS Miramar)\n📌 Box 1 — Wages: $34,080.00\n📌 Box 2 — Federal Tax Withheld: $3,912.00\n📌 Box 4 — Social Security Tax: $2,112.96\n📌 Box 6 — Medicare Tax: $494.16\n\n💡 Quick analysis:\n• Your effective federal tax rate: ~11.5%\n• You may be eligible for the Earned Income Tax Credit (EITC)\n• If you have dependents, check the Child Tax Credit ($2,000 per qualifying child)\n• Consider filing with FreeTaxUSA or IRS Free File to save on tax prep fees\n\n⚠️ Remember: I can explain tax documents, but always consult a CPA or tax professional for your specific situation.\n\nWant me to explain any box on this form?":"📄 Escaneé tu documento. Esto dice:\n\n📌 Tipo: W-2 Declaración de Salarios e Impuestos (2025)\n📌 Empleador: Departamento de la Marina (MCAS Miramar)\n📌 Casilla 1 — Salarios: $34,080.00\n📌 Casilla 2 — Impuesto Federal Retenido: $3,912.00\n📌 Casilla 4 — Seguro Social: $2,112.96\n📌 Casilla 6 — Medicare: $494.16\n\n💡 Análisis rápido:\n• Tu tasa de impuesto federal efectiva: ~11.5%\n• Podrías ser elegible para el Crédito Tributario por Ingreso del Trabajo (EITC)\n• Si tienes dependientes, revisa el Crédito Tributario por Hijos ($2,000 por hijo)\n• Considera declarar con FreeTaxUSA o IRS Free File para ahorrar\n\n⚠️ Recuerda: Puedo explicar documentos fiscales, pero siempre consulta un CPA para tu situación específica.\n\n¿Quieres que explique alguna casilla?",
+      bill: en?"📄 I scanned your document. Here's what it says:\n\n📌 Type: Utility Bill (SDG&E)\n📌 Billing Period: Feb 5 – Mar 5, 2026\n📌 Amount Due: $187.43\n📌 Due Date: March 25, 2026\n📌 Previous Balance: $0.00 (paid on time ✅)\n\nBreakdown:\n• Electric: $142.18 (620 kWh used)\n• Gas: $31.25\n• Taxes & fees: $14.00\n\n💡 Your electric usage is 18% higher than last month. This could be from heating — consider lowering your thermostat 2°F to save ~$15/month.\n\n📊 Compared to similar households in your area, your bill is about average.\n\nWant me to help you find ways to lower this bill?":"📄 Escaneé tu documento. Esto dice:\n\n📌 Tipo: Factura de Servicios (SDG&E)\n📌 Período: 5 feb – 5 mar, 2026\n📌 Monto: $187.43\n📌 Fecha límite: 25 de marzo, 2026\n📌 Balance anterior: $0.00 (pagado a tiempo ✅)\n\nDesglose:\n• Electricidad: $142.18 (620 kWh usados)\n• Gas: $31.25\n• Impuestos y cargos: $14.00\n\n💡 Tu uso eléctrico es 18% más alto que el mes pasado. Podría ser por calefacción — bajar el termostato 2°F puede ahorrar ~$15/mes.\n\n¿Quieres que te ayude a encontrar formas de reducir esta factura?"
+    };
+    const types=Object.keys(responses);
+    return responses[types[Math.floor(Math.random()*types.length)]];
+  };
+
+  const handleImageUpload=(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      const imgData=ev.target.result;
+      setChatMsgs(p=>[...p,{role:"user",text:en?"📸 Scanning this document...":"📸 Escaneando este documento...",image:imgData}]);
+      setScanning(true);
+      setTimeout(()=>{
+        setScanning(false);
+        setChatMsgs(p=>[...p,{role:"ai",text:getDocScanResponse()}]);
+      },2500);
+    };
+    reader.readAsDataURL(file);
+    if(fileRef.current)fileRef.current.value="";
+  };
+
+  const sendChat=()=>{if(!chatInput.trim())return;const input=chatInput;setChatMsgs(p=>[...p,{role:"user",text:input}]);setChatInput("");setTimeout(()=>setChatMsgs(p=>[...p,{role:"ai",text:getAiResponse(input)}]),800)};
+  useEffect(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight},[chatMsgs]);
+  useEffect(()=>{if(bankStep===1){const t=setTimeout(()=>setBankStep(2),2000);return()=>clearTimeout(t);}},[bankStep]);
+
+  // ═══ SPLASH ═══
+  if(screen==="splash") return(
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:F,position:"relative",overflow:"hidden"}}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+      <div style={{position:"absolute",top:"15%",left:"50%",transform:"translate(-50%,-50%)",width:350,height:350,borderRadius:"50%",background:`radial-gradient(circle,${C.green}12,transparent 70%)`,filter:"blur(50px)"}}/>
+      <div style={{width:72,height:72,borderRadius:18,background:`linear-gradient(135deg,${C.green},${C.greenDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,fontWeight:900,color:"#000",marginBottom:20,boxShadow:`0 0 50px ${C.green}33`}}>M</div>
+      <h1 style={{fontFamily:F,fontSize:44,fontWeight:800,color:C.text,margin:0,letterSpacing:-1.5}}>Money<span style={{color:C.green}}>IQ</span></h1>
+      <p style={{color:C.muted,fontSize:14,margin:"8px 0 0"}}>Tu coach financiero con IA</p>
+      <p style={{color:C.dim,fontSize:12,margin:"2px 0 36px"}}>Your AI financial coach</p>
+      <button onClick={()=>setScreen("signup")} style={{padding:"16px 52px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.green},${C.greenDark})`,color:"#000",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:F,boxShadow:`0 8px 30px ${C.green}33`}}>Get Started · Comenzar</button>
+    </div>
+  );
+
+  // ═══ SIGNUP (Terms as small print, not a wall) ═══
+  if(screen==="signup") return(
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:F,padding:20}}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+      <div style={{maxWidth:420,margin:"0 auto",paddingTop:30}}>
+        <h2 style={{color:C.text,fontSize:24,fontWeight:800,textAlign:"center",margin:"0 0 4px"}}>{en?"Create Your Account":"Crea Tu Cuenta"}</h2>
+        <p style={{color:C.muted,fontSize:13,textAlign:"center",margin:"0 0 24px"}}>{en?"Free forever. No credit card needed.":"Gratis para siempre. Sin tarjeta."}</p>
+        <input placeholder={en?"Full name":"Nombre completo"} defaultValue="Enmanuel" style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px",color:C.text,fontSize:14,fontFamily:F,outline:"none",marginBottom:10,boxSizing:"border-box"}}/>
+        <input placeholder={en?"Email":"Correo"} defaultValue="enmanuel@moneyiq.app" style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px",color:C.text,fontSize:14,fontFamily:F,outline:"none",marginBottom:10,boxSizing:"border-box"}}/>
+        <input type="password" placeholder={en?"Password":"Contraseña"} defaultValue="••••••••" style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px",color:C.text,fontSize:14,fontFamily:F,outline:"none",marginBottom:16,boxSizing:"border-box"}}/>
+        <Btn full onClick={()=>setScreen("app")}>{en?"Sign Up":"Registrarse"}</Btn>
+        <div style={{display:"flex",alignItems:"center",gap:8,margin:"16px 0"}}><div style={{flex:1,height:1,background:C.border}}/><span style={{color:C.dim,fontSize:11}}>{en?"or":"o"}</span><div style={{flex:1,height:1,background:C.border}}/></div>
+        <button onClick={()=>setScreen("app")} style={{width:"100%",padding:"12px",borderRadius:12,border:`1px solid ${C.border}`,background:C.card,color:C.text,fontSize:13,cursor:"pointer",fontFamily:F,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          <span style={{fontSize:18}}>G</span> {en?"Continue with Google":"Continuar con Google"}
+        </button>
+        {/* Disclaimer — small, clean, not a wall */}
+        <p style={{color:C.dim,fontSize:10,textAlign:"center",margin:"16px 0 0",lineHeight:1.6}}>{en?"By signing up you agree to our ":"Al registrarte aceptas nuestros "}<span style={{color:C.muted,textDecoration:"underline",cursor:"pointer"}}>{en?"Terms of Service":"Términos"}</span>{en?" and ":"  y "}<span style={{color:C.muted,textDecoration:"underline",cursor:"pointer"}}>{en?"Privacy Policy":"Privacidad"}</span>{en?". MoneyIQ provides financial education, not licensed financial advice.":". MoneyIQ provee educación financiera, no asesoría financiera licenciada."}</p>
+      </div>
+    </div>
+  );
+
+  // ═══ BANK LINK (Smooth, optional, no pressure) ═══
+  if(!linked&&screen==="app") return(
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:F}}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+      <div style={{padding:20,maxWidth:420,margin:"0 auto",paddingTop:40}}>
+        {bankStep===0&&(<>
+          <div style={{textAlign:"center",marginBottom:28}}>
+            <div style={{width:64,height:64,borderRadius:16,background:`${C.green}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:32,margin:"0 auto 16px"}}>🏦</div>
+            <h3 style={{color:C.text,fontSize:22,fontWeight:700,margin:"0 0 8px"}}>{en?"Connect Your Bank":"Conecta Tu Banco"}</h3>
+            <p style={{color:C.muted,fontSize:13,lineHeight:1.6,margin:"0 0 4px"}}>{en?"See real spending automatically. Or skip and enter manually — it's up to you.":"Ve tus gastos reales automáticamente. O sáltalo y escribe manualmente — tú decides."}</p>
+            <div style={{display:"flex",justifyContent:"center",gap:12,marginTop:12}}>{[{icon:"🔒",t:en?"Bank-level encryption":"Encriptación bancaria"},{icon:"👁️",t:en?"We never see your password":"Nunca vemos tu contraseña"},{icon:"🚫",t:en?"We never sell your data":"Nunca vendemos tus datos"}].map(b=>(<div key={b.t} style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:12}}>{b.icon}</span><span style={{color:C.dim,fontSize:9}}>{b.t}</span></div>))}</div>
+          </div>
+          {["🏦 Chase","🏦 Bank of America","🏦 Wells Fargo","🏦 Capital One","🏦 Citi"].map(b=>(<div key={b} onClick={()=>setBankStep(1)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",background:C.card,border:`1px solid ${C.border}`,borderRadius:12,marginBottom:8,cursor:"pointer"}}><span style={{color:C.text,fontSize:14}}>{b}</span><span style={{color:C.dim}}>→</span></div>))}
+          <div style={{textAlign:"center",marginTop:20}}>
+            <button onClick={()=>setLinked(true)} style={{padding:"14px 32px",borderRadius:12,border:"none",background:C.surface,color:C.muted,fontSize:13,cursor:"pointer",fontFamily:F,fontWeight:600}}>{en?"Skip for now — I'll enter manually":"Saltar — ingresaré manualmente"}</button>
+            <p style={{color:C.dim,fontSize:10,marginTop:8}}>{en?"You can connect your bank anytime in Settings":"Puedes conectar tu banco cuando quieras en Ajustes"}</p>
+          </div>
+        </>)}
+        {bankStep===1&&(<div style={{textAlign:"center",marginTop:80}}><div style={{width:60,height:60,borderRadius:30,border:`3px solid ${C.border}`,borderTopColor:C.green,margin:"0 auto 20px",animation:"spin 1s linear infinite"}}/><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style><p style={{color:C.text,fontSize:16,fontWeight:600}}>{en?"Connecting securely...":"Conectando de forma segura..."}</p><p style={{color:C.dim,fontSize:12,marginTop:8}}>Powered by Plaid</p></div>)}
+        {bankStep===2&&(<div style={{textAlign:"center",marginTop:80}}><div style={{width:60,height:60,borderRadius:30,background:`${C.green}22`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",fontSize:28}}>✓</div><h3 style={{color:C.green,fontSize:22,fontWeight:700,margin:"0 0 8px"}}>{en?"You're all set!":"¡Listo!"}</h3><p style={{color:C.muted,fontSize:13,margin:"0 0 24px"}}>{en?"Your transactions are syncing now":"Tus transacciones se están sincronizando"}</p><Btn full onClick={()=>setLinked(true)}>{en?"Let's Go":"Vamos"}</Btn></div>)}
+      </div>
+    </div>
+  );
+
+  // ═══ MAIN APP — 5 Tabs ═══
+  const tabs=[{id:"home",icon:"🏠",l:en?"Home":"Inicio"},{id:"budget",icon:"💳",l:en?"Budget":"Gastos"},{id:"chat",icon:"🤖",l:en?"Coach":"Coach"},{id:"goals",icon:"🎯",l:en?"Goals":"Metas"},{id:"settings",icon:"⚙️",l:en?"Settings":"Ajustes"}];
+
+  return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:F,display:"flex",flexDirection:"column"}}>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+    {/* NAV */}
+    <div style={{padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,background:C.bg,zIndex:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:24,height:24,borderRadius:6,background:`linear-gradient(135deg,${C.green},${C.greenDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,color:"#000"}}>M</div><span style={{fontWeight:700,fontSize:15,color:C.text}}>Money<span style={{color:C.green}}>IQ</span></span></div>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <button onClick={()=>setLang(l=>l==="en"?"es":"en")} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 8px",color:C.muted,fontSize:10,cursor:"pointer",fontFamily:F,fontWeight:600}}>{en?"🇪🇸":"🇺🇸"}</button>
+        <div onClick={()=>setShowProfile(true)} style={{width:28,height:28,borderRadius:14,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#000",cursor:"pointer"}}>{userName[0]}</div>
+      </div>
+    </div>
+
+    <div style={{flex:1,overflow:"auto",paddingBottom:70}}>
+
+    {/* ════ HOME ════ */}
+    {tab==="home"&&(<div style={{padding:"16px 16px 0",maxWidth:500,margin:"0 auto"}}>
+      <h2 style={{color:C.text,fontSize:20,fontWeight:700,margin:"0 0 2px"}}>{en?`Hey ${userName} 👋`:`Hola ${userName} 👋`}</h2>
+      <p style={{color:C.muted,fontSize:12,margin:"0 0 16px"}}>{en?"Your financial pulse":"Tu pulso financiero"}</p>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+        <Card><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><p style={{color:C.dim,fontSize:9,fontWeight:700,letterSpacing:.8,margin:0}}>MONEY IQ</p><h3 style={{color:C.green,fontSize:30,fontWeight:800,margin:"4px 0 3px"}}>742</h3><Pill color={C.green}>↑ +18</Pill></div><Ring pct={74} size={50}/></div></Card>
+        <Card><p style={{color:C.dim,fontSize:9,fontWeight:700,letterSpacing:.8,margin:0}}>{en?"NET WORTH":"PATRIMONIO"}</p><h3 style={{color:C.text,fontSize:30,fontWeight:800,margin:"4px 0 3px"}}>$47,230</h3><div style={{display:"flex",alignItems:"center",gap:8}}><Pill color={C.green}>↑ 12.4%</Pill><Chart data={[30,33,28,35,40,38,45,47]} w={60} h={20}/></div></Card>
+      </div>
+      <Card style={{marginBottom:10,border:`1px solid ${C.green}22`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div><p style={{color:C.dim,fontSize:9,fontWeight:700,letterSpacing:.8,margin:0}}>{en?"BUDGET":"PRESUPUESTO"}</p><h3 style={{color:C.text,fontSize:22,fontWeight:800,margin:"3px 0"}}>{fmt(totalSpent)} <span style={{color:C.dim,fontSize:14}}>/ {fmt(totalBudget)}</span></h3></div><Ring pct={Math.round(totalSpent/totalBudget*100)} size={44} color={totalSpent>totalBudget?C.red:C.green}/></div>
+        <Bar pct={totalSpent/totalBudget*100} color={C.green} h={6}/>
+      </Card>
+      {/* AI Coach — the star */}
+      <Card style={{marginBottom:10,background:`linear-gradient(135deg,${C.card},${C.green}06)`,border:`1px solid ${C.green}22`}} onClick={()=>setTab("chat")}>
+        <div style={{display:"flex",gap:10}}><div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${C.green},${C.greenDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🤖</div>
+        <div style={{flex:1}}><p style={{color:C.green,fontSize:10,fontWeight:700,margin:0,letterSpacing:.8}}>AI COACH</p><p style={{color:C.text,fontSize:12,margin:"5px 0 0",lineHeight:1.5}}>{en?"Ask me anything — bills, credit, cash flow, investing, remittances. 📸 NEW: Snap a photo of any letter or bill and I'll explain it in your language.":"Pregúntame lo que sea — facturas, crédito, flujo, inversiones, remesas. 📸 NUEVO: Toma foto de cualquier carta y te la explico en tu idioma."}</p></div>
+        <span style={{color:C.green,fontSize:18,alignSelf:"center"}}>→</span></div>
+      </Card>
+      {/* Goals Preview */}
+      <Card style={{marginBottom:10}} onClick={()=>setTab("goals")}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><p style={{color:C.dim,fontSize:9,fontWeight:700,letterSpacing:.8,margin:0}}>{en?"GOALS":"METAS"}</p><span style={{color:C.green,fontSize:11,fontWeight:700}}>→</span></div>
+        {goals.slice(0,3).map(g=>{const pct=Math.round(g.current/g.target*100);return(<div key={g.id} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:C.text,fontSize:12}}>{g.emoji} {en?g.nameEn:g.nameEs}</span><span style={{color:g.color,fontSize:11,fontWeight:700}}>{pct}%</span></div><Bar pct={pct} color={g.color} h={4}/></div>)})}
+      </Card>
+      {/* Transactions */}
+      <Card>
+        <p style={{color:C.dim,fontSize:9,fontWeight:700,letterSpacing:.8,margin:"0 0 8px"}}>{en?"RECENT":"RECIENTES"}</p>
+        {transactions.map((t,i)=>(<div key={t.id} onClick={()=>setTxnDetail(t)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:i<transactions.length-1?`1px solid ${C.border}`:"none",cursor:"pointer"}}><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:16,width:24,textAlign:"center"}}>{t.cat}</span><div><div style={{color:C.text,fontSize:12,fontWeight:600}}>{t.name}</div><div style={{color:C.dim,fontSize:10}}>{t.date}</div></div></div><span style={{color:t.amt>0?C.green:C.text,fontSize:12,fontWeight:700}}>{t.amt>0?"+":""}{fmt(t.amt)}</span></div>))}
+      </Card>
+    </div>)}
+
+    {/* ════ BUDGET ════ */}
+    {tab==="budget"&&(<div style={{padding:"16px 16px 0",maxWidth:500,margin:"0 auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><div><h2 style={{color:C.text,fontSize:20,fontWeight:700,margin:"0 0 2px"}}>{en?"Budget":"Presupuesto"}</h2><p style={{color:C.muted,fontSize:12,margin:0}}>{en?"March 2026":"Marzo 2026"}</p></div><Pill color={variableIncome?C.amber:C.dim}>{variableIncome?(en?"Variable":"Variable"):(en?"Fixed":"Fijo")}</Pill></div>
+      {variableIncome&&(<Card style={{marginBottom:10,border:`1px solid ${C.amber}33`,background:`linear-gradient(135deg,${C.card},${C.amber}06)`}}><div style={{display:"flex",gap:10,alignItems:"center"}}><span style={{fontSize:22}}>📊</span><div><p style={{color:C.amber,fontSize:11,fontWeight:700,margin:0}}>{en?"VARIABLE INCOME":"INGRESO VARIABLE"}</p><p style={{color:C.text,fontSize:12,margin:"4px 0 0"}}>{en?"This week: $710 received, $588 budgeted":"Esta semana: $710 recibido, $588 presupuestado"}</p></div></div></Card>)}
+      <Card style={{marginBottom:12,border:`1px solid ${C.green}22`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div><p style={{color:C.dim,fontSize:9,fontWeight:700,margin:0}}>{en?"SPENT":"GASTADO"}</p><h3 style={{color:C.text,fontSize:26,fontWeight:800,margin:"3px 0"}}>{fmt(totalSpent)}</h3></div><div style={{textAlign:"right"}}><p style={{color:C.dim,fontSize:9,fontWeight:700,margin:0}}>{en?"BUDGET":"META"}</p><h3 style={{color:C.muted,fontSize:26,fontWeight:800,margin:"3px 0"}}>{fmt(totalBudget)}</h3></div></div>
+        <Bar pct={totalSpent/totalBudget*100} color={C.green} h={8}/>
+        <p style={{color:totalSpent<=totalBudget?C.green:C.red,fontSize:11,fontWeight:600,margin:"6px 0 0"}}>{totalSpent<=totalBudget?`${fmt(totalBudget-totalSpent)} ${en?"left":"restante"} ✓`:`⚠️ ${fmt(totalSpent-totalBudget)} ${en?"over":"excedido"}`}</p>
+      </Card>
+      {budgets.map(cat=>(<Card key={cat.id} style={{marginBottom:8,cursor:"pointer"}} onClick={()=>setEditBudget(cat)}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:18}}>{cat.icon}</span><span style={{color:C.text,fontSize:13,fontWeight:600}}>{en?cat.labelEn:cat.labelEs}</span></div><div><span style={{color:cat.spent>cat.budget?C.red:C.text,fontSize:13,fontWeight:700}}>{fmt(cat.spent)}</span><span style={{color:C.dim,fontSize:11}}> / {fmt(cat.budget)}</span></div></div><Bar pct={cat.spent/cat.budget*100} color={cat.color}/>{cat.spent>cat.budget&&<p style={{color:C.red,fontSize:10,margin:"5px 0 0",fontWeight:600}}>⚠️ +{fmt(cat.spent-cat.budget)}</p>}</Card>))}
+    </div>)}
+
+    {/* ════ AI COACH — THE PRODUCT ════ */}
+    {tab==="chat"&&(<div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 120px)",maxWidth:500,margin:"0 auto"}}>
+      <div style={{padding:"16px 16px 8px"}}><h2 style={{color:C.text,fontSize:20,fontWeight:700,margin:0}}>🤖 {en?"AI Coach":"Coach IA"}</h2><p style={{color:C.muted,fontSize:11,margin:"4px 0 0"}}>{en?"Bills · Credit · Cash Flow · Savings · Investing · 📸 Document Scanner":"Facturas · Crédito · Flujo · Ahorro · Inversiones · 📸 Escáner"}</p></div>
+      {/* Quick action chips */}
+      {chatMsgs.length===0&&(<div style={{padding:"0 16px 8px",display:"flex",gap:6,flexWrap:"wrap"}}>
+        {(en?["📸 Scan a document","What bills am I paying?","Will I make it to payday?","How's my credit?","Open a Roth IRA","Cheapest way to send $ to DR","Help me save more"]:["📸 Escanear documento","¿Qué facturas pago?","¿Llegaré al día de pago?","¿Cómo va mi crédito?","Abrir un Roth IRA","Enviar dinero a RD barato","Ayúdame a ahorrar"]).map(chip=>(<button key={chip} onClick={()=>{if(chip.includes("📸")){fileRef.current?.click();return;}setChatInput(chip);setTimeout(()=>{setChatMsgs(p=>[...p,{role:"user",text:chip}]);setTimeout(()=>setChatMsgs(p=>[...p,{role:"ai",text:getAiResponse(chip)}]),800)},100)}} style={{padding:"8px 12px",borderRadius:20,border:`1px solid ${chip.includes("📸")?C.amber:C.border}`,background:chip.includes("📸")?`${C.amber}15`:C.card,color:chip.includes("📸")?C.amber:C.green,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>{chip}</button>))}
+      </div>)}
+      <div ref={chatRef} style={{flex:1,overflow:"auto",padding:"0 16px"}}>
+        {chatMsgs.length===0&&(<div style={{textAlign:"center",paddingTop:30}}><div style={{fontSize:48,marginBottom:12}}>🤖</div><p style={{color:C.text,fontSize:16,fontWeight:700,margin:"0 0 8px"}}>{en?"I'm your MoneyIQ Coach":"Soy tu Coach MoneyIQ"}</p><p style={{color:C.muted,fontSize:13,lineHeight:1.6,maxWidth:300,margin:"0 auto 16px"}}>{en?"Ask me anything about your money. I'll use your real financial data to give personalized advice — not generic tips.":"Pregúntame sobre tu dinero. Uso tus datos reales para consejos personalizados."}</p>
+          <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"10px 16px",borderRadius:12,background:`${C.amber}12`,border:`1px solid ${C.amber}33`}}><span style={{fontSize:20}}>📸</span><div style={{textAlign:"left"}}><p style={{color:C.amber,fontSize:12,fontWeight:700,margin:0}}>{en?"Document Scanner":"Escáner de Documentos"}</p><p style={{color:C.muted,fontSize:10,margin:"2px 0 0"}}>{en?"Take a photo of any letter, bill, or statement — I'll explain it in your language":"Toma foto de cualquier carta o factura — te la explico en tu idioma"}</p></div></div>
+        </div>)}
+        {chatMsgs.map((m,i)=>(<div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start",marginBottom:10}}>
+          <div style={{maxWidth:"85%",padding:"10px 14px",borderRadius:m.role==="user"?"14px 14px 4px 14px":"14px 14px 14px 4px",background:m.role==="user"?C.green:C.card,border:m.role==="ai"?`1px solid ${C.border}`:"none",color:m.role==="user"?"#000":C.text,fontSize:13,lineHeight:1.6,whiteSpace:"pre-line"}}>
+            {m.image&&(<div style={{marginBottom:8,borderRadius:10,overflow:"hidden",border:`1px solid ${m.role==="user"?"rgba(0,0,0,.2)":C.border}`}}><img src={m.image} alt="document" style={{width:"100%",maxHeight:200,objectFit:"cover",display:"block"}}/></div>)}
+            {m.text}
+          </div>
+        </div>))}
+        {scanning&&(<div style={{display:"flex",justifyContent:"flex-start",marginBottom:10}}><div style={{maxWidth:"85%",padding:"14px 18px",borderRadius:"14px 14px 14px 4px",background:C.card,border:`1px solid ${C.border}`}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}><div style={{display:"flex",gap:4}}><div style={{width:8,height:8,borderRadius:4,background:C.green,animation:"pulse 1.2s ease infinite"}}/>
+          <div style={{width:8,height:8,borderRadius:4,background:C.green,animation:"pulse 1.2s ease infinite .2s"}}/>
+          <div style={{width:8,height:8,borderRadius:4,background:C.green,animation:"pulse 1.2s ease infinite .4s"}}/></div>
+          <span style={{color:C.muted,fontSize:12}}>{en?"Reading document...":"Leyendo documento..."}</span></div>
+          <style>{`@keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.1)}}`}</style>
+        </div></div>)}
+      </div>
+      <div style={{padding:"8px 16px 16px"}}>
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleImageUpload} style={{display:"none"}}/>
+        <div style={{display:"flex",gap:6,marginBottom:8}}>
+          <button onClick={()=>{if(fileRef.current){fileRef.current.setAttribute("capture","environment");fileRef.current.click()}}} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:20,border:`1px solid ${C.amber}55`,background:`${C.amber}12`,color:C.amber,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>📷 {en?"Camera":"Cámara"}</button>
+          <button onClick={()=>{if(fileRef.current){fileRef.current.removeAttribute("capture");fileRef.current.click()}}} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:20,border:`1px solid ${C.blue}55`,background:`${C.blue}12`,color:C.blue,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>🖼️ {en?"Upload":"Subir"}</button>
+          <span style={{color:C.dim,fontSize:10,alignSelf:"center"}}>{en?"Snap a bill, letter, or statement":"Foto de factura, carta, o estado"}</span>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <input value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")sendChat()}} placeholder={en?"Ask about bills, credit, saving, investing...":"Pregunta sobre facturas, crédito, ahorro..."} style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",color:C.text,fontSize:13,fontFamily:F,outline:"none"}}/>
+          <button onClick={sendChat} style={{width:44,borderRadius:12,border:"none",background:C.green,color:"#000",fontWeight:800,fontSize:16,cursor:"pointer"}}>↑</button>
+        </div>
+      </div>
+    </div>)}
+
+    {/* ════ GOALS ════ */}
+    {tab==="goals"&&(<div style={{padding:"16px 16px 0",maxWidth:500,margin:"0 auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><h2 style={{color:C.text,fontSize:20,fontWeight:700,margin:0}}>{en?"Savings Goals":"Metas de Ahorro"}</h2><Btn small onClick={()=>setShowAddGoal(true)}>+ {en?"Add":"Agregar"}</Btn></div>
+      {/* Total progress */}
+      <Card style={{marginBottom:12,border:`1px solid ${C.green}22`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><p style={{color:C.dim,fontSize:9,fontWeight:700,margin:0}}>{en?"TOTAL SAVED":"TOTAL AHORRADO"}</p><h3 style={{color:C.green,fontSize:28,fontWeight:800,margin:"3px 0"}}>{fmt(goals.reduce((a,g)=>a+g.current,0))}</h3></div><div style={{textAlign:"right"}}><p style={{color:C.dim,fontSize:9,fontWeight:700,margin:0}}>{en?"TOTAL TARGET":"META TOTAL"}</p><h3 style={{color:C.muted,fontSize:28,fontWeight:800,margin:"3px 0"}}>{fmt(goals.reduce((a,g)=>a+g.target,0))}</h3></div></div>
+        <Bar pct={goals.reduce((a,g)=>a+g.current,0)/goals.reduce((a,g)=>a+g.target,0)*100} color={C.green} h={6}/>
+      </Card>
+      {goals.map(g=>{const pct=Math.round(g.current/g.target*100);const mo=g.monthly>0?Math.ceil((g.target-g.current)/g.monthly):0;return(
+        <Card key={g.id} style={{marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+            <div style={{width:44,height:44,borderRadius:12,background:`${g.color}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>{g.emoji}</div>
+            <div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text,fontSize:14,fontWeight:700}}>{en?g.nameEn:g.nameEs}</span><span style={{color:g.color,fontSize:14,fontWeight:800}}>{pct}%</span></div>
+            <Bar pct={pct} color={g.color} h={6}/>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{color:C.muted,fontSize:10}}>{fmt(g.current)} / {fmt(g.target)}</span><span style={{color:C.dim,fontSize:10}}>{mo>0?`${mo} ${en?"months left":"meses"}`:en?"Done!":"¡Listo!"}</span></div></div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>setGoals(p=>p.map(x=>x.id===g.id?{...x,current:Math.min(x.current+x.monthly,x.target)}:x))} style={{flex:1,padding:"8px",borderRadius:8,border:"none",background:`${g.color}22`,color:g.color,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:F}}>+ {fmt(g.monthly)}</button>
+            <button onClick={()=>setTab("chat")} style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.green,fontSize:11,cursor:"pointer",fontFamily:F,fontWeight:600}}>🤖 {en?"Get advice":"Consejos"}</button>
+            <button onClick={()=>setGoals(p=>p.filter(x=>x.id!==g.id))} style={{padding:"8px 12px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.red,fontSize:11,cursor:"pointer"}}>🗑️</button>
+          </div>
+        </Card>);})}
+    </div>)}
+
+    {/* ════ SETTINGS ════ */}
+    {tab==="settings"&&(<div style={{padding:"16px 16px 0",maxWidth:500,margin:"0 auto"}}>
+      <h2 style={{color:C.text,fontSize:20,fontWeight:700,margin:"0 0 14px"}}>{en?"Settings":"Ajustes"}</h2>
+      <Card style={{marginBottom:10}}>
+        <p style={{color:C.dim,fontSize:9,fontWeight:700,letterSpacing:.8,margin:"0 0 10px"}}>{en?"PROFILE":"PERFIL"}</p>
+        <div style={{display:"flex",alignItems:"center",gap:12}}><div style={{width:44,height:44,borderRadius:22,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800,color:"#000"}}>{userName[0]}</div><div><input value={userName} onChange={e=>setUserName(e.target.value)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",color:C.text,fontSize:14,fontFamily:F,outline:"none",fontWeight:600}}/><p style={{color:C.dim,fontSize:10,margin:"4px 0 0"}}>enmanuel@moneyiq.app</p></div></div>
+      </Card>
+      <Card style={{marginBottom:10}}>
+        <p style={{color:C.dim,fontSize:9,fontWeight:700,letterSpacing:.8,margin:"0 0 10px"}}>{en?"PREFERENCES":"PREFERENCIAS"}</p>
+        <Toggle on={lang==="es"} onToggle={()=>setLang(l=>l==="en"?"es":"en")} label={en?"Español Mode":"Modo Español"}/>
+        <div style={{borderBottom:`1px solid ${C.border}`}}/>
+        <Toggle on={variableIncome} onToggle={()=>setVariableIncome(v=>!v)} label={en?"Variable Income":"Ingreso Variable"}/>
+      </Card>
+      <Card style={{marginBottom:10}}>
+        <p style={{color:C.dim,fontSize:9,fontWeight:700,letterSpacing:.8,margin:"0 0 10px"}}>{en?"SUBSCRIPTION":"SUSCRIPCIÓN"}</p>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><span style={{color:C.text,fontSize:13}}>{en?"Current Plan":"Plan Actual"}</span><Pill color={C.dim}>{en?"Free":"Gratis"}</Pill></div>
+        <Btn full small color={C.green}>{en?"Upgrade to Pro — $3.99/mo":"Pro — $3.99/mes"}</Btn>
+        <p style={{color:C.dim,fontSize:10,margin:"8px 0 0",textAlign:"center"}}>{en?"Pro unlocks live bank sync via Plaid":"Pro desbloquea sincronización bancaria"}</p>
+      </Card>
+      <Card style={{marginBottom:10}}>
+        <p style={{color:C.dim,fontSize:9,fontWeight:700,letterSpacing:.8,margin:"0 0 10px"}}>{en?"LEGAL":"LEGAL"}</p>
+        {[en?"Terms of Service":"Términos de Servicio",en?"Privacy Policy":"Política de Privacidad",en?"Delete My Data":"Eliminar Mis Datos"].map(item=>(<div key={item} style={{padding:"10px 0",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",cursor:"pointer"}}><span style={{color:C.text,fontSize:13}}>{item}</span><span style={{color:C.dim}}>→</span></div>))}
+      </Card>
+      <Btn full outline color={C.red} style={{marginBottom:20}} onClick={()=>{setScreen("splash");setLinked(false);setBankStep(0);setTab("home");setChatMsgs([])}}>{en?"Log Out":"Cerrar Sesión"}</Btn>
+    </div>)}
+
+    </div>
+
+    {/* TAB BAR */}
+    <div style={{display:"flex",background:C.card,borderTop:`1px solid ${C.border}`,position:"fixed",bottom:0,left:0,right:0,zIndex:20}}>
+      {tabs.map(t=>{const active=tab===t.id;return(<button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"8px 0 6px",background:"transparent",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,borderTop:active?`2px solid ${C.green}`:"2px solid transparent"}}>
+        <span style={{fontSize:16,opacity:active?1:.4}}>{t.icon}</span>
+        <span style={{fontSize:8,fontWeight:active?700:400,color:active?C.green:C.muted,fontFamily:F}}>{t.l}</span>
+      </button>);})}
+    </div>
+
+    {/* MODALS */}
+    <Modal open={showProfile} onClose={()=>setShowProfile(false)} title={en?"Profile":"Perfil"}>
+      <div style={{textAlign:"center"}}><div style={{width:60,height:60,borderRadius:30,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,fontWeight:800,color:"#000",margin:"0 auto 10px"}}>{userName[0]}</div><input value={userName} onChange={e=>setUserName(e.target.value)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",color:C.text,fontSize:16,fontFamily:F,outline:"none",textAlign:"center",fontWeight:700,width:"80%",marginBottom:16}}/><Btn full small onClick={()=>setShowProfile(false)}>{en?"Close":"Cerrar"}</Btn></div>
+    </Modal>
+    <Modal open={!!editBudget} onClose={()=>setEditBudget(null)} title={en?"Edit Budget":"Editar"}>
+      {editBudget&&(<div><p style={{color:C.text,fontSize:16,fontWeight:700,margin:"0 0 12px"}}>{editBudget.icon} {en?editBudget.labelEn:editBudget.labelEs}</p><label style={{color:C.muted,fontSize:11}}>{en?"Limit":"Límite"}</label><input type="number" value={editBudget.budget} onChange={e=>setEditBudget({...editBudget,budget:Number(e.target.value)})} style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px",color:C.text,fontSize:16,fontFamily:F,outline:"none",marginBottom:10,boxSizing:"border-box"}}/><label style={{color:C.muted,fontSize:11}}>{en?"Spent":"Gastado"}</label><input type="number" value={editBudget.spent} onChange={e=>setEditBudget({...editBudget,spent:Number(e.target.value)})} style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px",color:C.text,fontSize:16,fontFamily:F,outline:"none",marginBottom:14,boxSizing:"border-box"}}/><Btn full onClick={()=>{setBudgets(p=>p.map(b=>b.id===editBudget.id?editBudget:b));setEditBudget(null)}}>{en?"Save":"Guardar"}</Btn></div>)}
+    </Modal>
+    <Modal open={showAddGoal} onClose={()=>setShowAddGoal(false)} title={en?"New Goal":"Nueva Meta"}>
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>{["🎯","🏠","🚗","✈️","💍","📱","🎓","💰","🛡️","🏖️"].map(e=>(<button key={e} onClick={()=>setNewGoal(g=>({...g,emoji:e}))} style={{width:36,height:36,borderRadius:8,border:newGoal.emoji===e?`2px solid ${C.green}`:`1px solid ${C.border}`,background:newGoal.emoji===e?`${C.green}22`:C.surface,fontSize:18,cursor:"pointer"}}>{e}</button>))}</div>
+      <input value={newGoal.name} onChange={e=>setNewGoal(g=>({...g,name:e.target.value}))} placeholder={en?"Goal name":"Nombre"} style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",color:C.text,fontSize:14,fontFamily:F,outline:"none",marginBottom:8,boxSizing:"border-box"}}/>
+      <input type="number" value={newGoal.target} onChange={e=>setNewGoal(g=>({...g,target:e.target.value}))} placeholder={en?"Target ($)":"Objetivo ($)"} style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",color:C.text,fontSize:14,fontFamily:F,outline:"none",marginBottom:8,boxSizing:"border-box"}}/>
+      <input type="number" value={newGoal.monthly} onChange={e=>setNewGoal(g=>({...g,monthly:e.target.value}))} placeholder={en?"Monthly ($)":"Mensual ($)"} style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",color:C.text,fontSize:14,fontFamily:F,outline:"none",marginBottom:12,boxSizing:"border-box"}}/>
+      <Btn full onClick={()=>{if(newGoal.name&&newGoal.target&&newGoal.monthly){setGoals(p=>[...p,{id:Date.now(),emoji:newGoal.emoji,nameEn:newGoal.name,nameEs:newGoal.name,current:0,target:Number(newGoal.target),color:[C.green,C.blue,C.amber,C.purple,C.teal][Math.floor(Math.random()*5)],monthly:Number(newGoal.monthly)}]);setNewGoal({emoji:"🎯",name:"",target:"",monthly:""});setShowAddGoal(false);}}}>{en?"Create":"Crear"}</Btn>
+    </Modal>
+    <Modal open={!!txnDetail} onClose={()=>setTxnDetail(null)} title={en?"Transaction":"Transacción"}>
+      {txnDetail&&(<div style={{textAlign:"center"}}><div style={{fontSize:40,marginBottom:8}}>{txnDetail.cat}</div><h3 style={{color:C.text,fontSize:20,fontWeight:800,margin:"0 0 4px"}}>{txnDetail.name}</h3><p style={{color:txnDetail.amt>0?C.green:C.text,fontSize:28,fontWeight:800,margin:"8px 0"}}>{txnDetail.amt>0?"+":""}{fmt(txnDetail.amt)}</p><Pill color={C.muted}>{txnDetail.catName}</Pill><div style={{marginTop:16,textAlign:"left"}}>{[{l:en?"Date":"Fecha",v:txnDetail.date+", 2026"},{l:en?"Description":"Descripción",v:txnDetail.desc},{l:en?"Account":"Cuenta",v:"Chase ····4829"}].map(r=>(<div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.muted,fontSize:12}}>{r.l}</span><span style={{color:C.text,fontSize:12,fontWeight:600}}>{r.v}</span></div>))}</div></div>)}
+    </Modal>
+  </div>);
+}
+
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(MoneyIQ));
+</script>
+</body>
+</html>
